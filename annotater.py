@@ -97,7 +97,7 @@ def save_files():
     global im
     files = [('npz Files', '*.npz')]
     path = filedialog.asksaveasfile(initialdir="C:/numy", filetypes=files, defaultextension=files)
-    if path == '':
+    if path == '' or path is None:
         return
     image = np.array([im.get_original()])
     mask = np.array([im.get_mask()])

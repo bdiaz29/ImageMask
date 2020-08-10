@@ -105,7 +105,7 @@ def save_files():
 
 
 window = Tk()
-window.title("Bruno'd Image Annotation Program")
+window.title("Bruno's Image Annotation Program")
 window.geometry('750x750')
 
 # im = Pic(img)

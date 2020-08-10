@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image, ImageGrab, ImageTk
 import cv2
 
+
 # class that holds the image and its mask
 class Pic:
     def __init__(self, img):
@@ -106,11 +107,17 @@ class Pic:
         # determine cursor alignment
         x1_m, y1_m, x2_m, y2_m, x1_c, y1_c, x2_c, y2_c = self.get_alingment(x_pos, y_pos, cursor_mask)
 
+        copy_cursor = cursor_mask[y1_c:y2_c, x1_c:x2_c]
+        copy_height = np.shape(copy_cursor)[0]
+        copy_width = np.shape(copy_cursor)[1]
+
         # apply changes to mask
-        if mask_unmasked:
-            self.mask[y1_m:y2_m, x1_m:x2_m] = cursor_mask[y1_c:y2_c, x1_c:x2_c] | self.mask[y1_m:y2_m, x1_m:x2_m]
-        else:
-            self.mask[y1_m:y2_m, x1_m:x2_m] = ~(cursor_mask[y1_c:y2_c, x1_c:x2_c]) & self.mask[y1_m:y2_m, x1_m:x2_m]
+        for i in range(copy_height):
+            for j in range(copy_width):
+                if mask_unmasked:
+                    self.mask[i + y1_m, j + x1_m] = copy_cursor[i, j] | self.mask[i + y1_m, j + x1_m]
+                else:
+                    self.mask[i + y1_m, j + x1_m] = ~(copy_cursor[i, j]) & self.mask[i + y1_m, j + x1_m]
 
         # update the mask
         self.update_mask(x1_m, y1_m, x2_m + 1, y2_m + 1)

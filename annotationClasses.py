@@ -7,6 +7,11 @@ import cv2
 # class that holds the image and its mask
 class Pic:
     def __init__(self, img):
+        # save the height and width of the original picture
+        height = np.shape(img)[0]
+        width = np.shape(img)[1]
+        self.original_height = height
+        self.original_width = width
         # the original picture scaled to 672 by 672
         self.original_picture = cv2.resize(img, (672, 672))
         # black and white version of photo
@@ -14,10 +19,138 @@ class Pic:
         # the mask initiated to be all false
         self.mask = np.zeros((672, 672), dtype=bool)
         # the picture to show the effect of the mask on the original picture
-        self.masked = np.copy(self.original_picture)
+        # self.masked = np.copy(self.original_picture)
+        self.masked = np.copy(self.BW)
         # updates masked to match the mask
-        self.update_mask(0, 0, 672, 672)
+        # self.update_mask(0, 0, 672, 672)
+
         self.state = True
+        self.backup = []
+        self.color_state = 21
+        self.x1 = 0
+        self.y1 = 0
+        self.x2 = 671
+        self.y2 = 671
+        self.scale = (self.x2 - self.x1) / 671
+        self.sizes = [671, 604, 537, 470, 403, 336, 268, 201, 134, 67]
+        self.size_index = 0
+
+        self.x1_old = 0
+        self.y1_old = 0
+        self.x2_old = 671
+        self.y2_old = 671
+
+        self.x_old = 0
+        self.y_old = 0
+
+    def set_old(self, x, y):
+        self.x1_old = self.x1
+        self.y1_old = self.y1
+        self.x2_old = self.x2
+        self.y2_old = self.y2
+
+        self.x_old = x
+        self.y_old = y
+        p=0
+
+    # zooms in
+    def zoom_in(self, x, y):
+        # zoom limit
+        if self.size_index + 1 >= len(self.sizes):
+            return
+        self.size_index += 1
+        size = self.sizes[self.size_index]
+        # convert the read in x and y value into the actual values
+        # scale x_pos
+        x_pos = int((x * self.scale) + self.x1)
+        y_pos = int((y * self.scale) + self.y1)
+
+        # determine new center
+        # detemine the offset for the center
+        x_off = int(((x / 671) - .5) * size)
+        y_off = int(((y / 671) - .5) * size)
+
+        x_center = x_pos - x_off
+        y_center = y_pos - y_off
+
+        # set new window values
+        self.x1, self.y1, self.x2, self.y2 = self.center_on(size, x_center, y_center)
+        # set new scale
+        self.scale = (self.x2 - self.x1) / 671
+
+    # zooms in
+    def zoom_out(self, x, y):
+        # zoom limit
+        if self.size_index - 1 < 0:
+            return
+        self.size_index -= 1
+        size = self.sizes[self.size_index]
+        # convert the read in x and y value into the actual values
+        # scale x_pos
+        x_pos = int((x * self.scale) + self.x1)
+        y_pos = int((y * self.scale) + self.y1)
+
+        # determine new center
+        # detemine the offset for the center
+        x_off = int(((x / 671) - .5) * size)
+        y_off = int(((y / 671) - .5) * size)
+
+        x_center = x_pos - x_off
+        y_center = y_pos - y_off
+
+        # set new window values
+        self.x1, self.y1, self.x2, self.y2 = self.center_on(size, x_center, y_center)
+        # set new scale
+        self.scale = (self.x2 - self.x1) / 671
+
+    # pans around the zoomed image
+    def pan(self, x, y, ):
+        size = self.sizes[self.size_index]
+
+        x_off_old_0 = int(((self.x_old / 671) - .5) * size)
+        y_off_old_0 = int(((self.y_old / 671) - .5) * size)
+
+        x_off_old = int((self.x_old / 671) * size)
+        y_off_old = int((self.y_old / 671) * size)
+
+        x_off_new = int((x / 671) * size)
+        y_off_new = int((y / 671) * size)
+
+        x_diff = x_off_old - x_off_new
+        y_diff = y_off_old - y_off_new
+
+        x_pos_old_center = int((self.x_old * self.scale) + self.x1_old)-x_off_old_0
+        y_pos_old_center = int((self.y_old * self.scale) + self.y1_old)-y_off_old_0
+
+        x_center = x_pos_old_center + x_diff
+        y_center = y_pos_old_center + y_diff
+
+        self.x1, self.y1, self.x2, self.y2 = self.center_on(size, x_center, y_center)
+
+    # centers the window on
+    def center_on(self, size, x, y):
+        mid = int(size / 2)
+        # probable new x1 and y1 values  before
+        # accouting for bounds
+        prob_x = x - mid
+        prob_y = y - mid
+
+        # determine the offset to determne new window values
+        x_sub = min((x - mid), 0)
+        y_sub = min((y - mid), 0)
+        x_add = min((671 - (x + mid)), 0)
+        y_add = min((671 - (y + mid)), 0)
+
+        x_offset = prob_x - x_sub + x_add
+        y_offset = prob_y - y_sub + y_add
+
+        # calculate new window values
+        xmin = x_offset
+        ymin = y_offset
+        xmax = x_offset + size
+        ymax = y_offset + size
+
+        return xmin, ymin, xmax, ymax
 
     # toggles whether the output image will the masked image or the mask itself
     def toggle_state(self):
@@ -72,6 +205,10 @@ class Pic:
         else:
             Temp = np.uint8(np.copy(self.mask) * 255)
             copy_img = cv2.cvtColor(Temp, cv2.COLOR_GRAY2BGR)
+        # resize to show zoom window
+        copy_img = copy_img[self.y1:self.y2, self.x1:self.x2]
+        copy_img = cv2.resize(copy_img, (672, 672), interpolation=cv2.INTER_NEAREST)
+
         # if the mouse event is out of bounds simply return the image without a cursor
         if x_pos > 671 or x_pos < 0 or y_pos > 671 or y_pos < 0:
             copy_img_rgb = cv2.cvtColor(copy_img, cv2.COLOR_BGR2RGB)
@@ -101,10 +238,20 @@ class Pic:
         return copy_img_tk
 
     # apply or remove mask from area
-    def mask_area(self, x_pos, y_pos, cursor_mask, mask_unmasked):
-        if x_pos > 671 or x_pos < 0 or y_pos > 671 or y_pos < 0:
+    def mask_area(self, x, y, cursor, mask_unmasked):
+        if x > 671 or x < 0 or y > 671 or y < 0:
             return
         # determine cursor alignment
+        # rescale cursor
+        c_height = int(np.shape(cursor)[0] * self.scale)
+        c_width = int(np.shape(cursor)[1] * self.scale)
+        cursor_mask = cv2.resize(np.uint8(cursor * 255), (c_width, c_height), interpolation=cv2.INTER_NEAREST)
+        cursor_mask = np.array((cursor_mask / 255), dtype=bool)
+
+        # scale x_pos
+        x_pos = int((x * self.scale) + self.x1)
+        y_pos = int((y * self.scale) + self.y1)
+
         x1_m, y1_m, x2_m, y2_m, x1_c, y1_c, x2_c, y2_c = self.get_alingment(x_pos, y_pos, cursor_mask)
 
         copy_cursor = cursor_mask[y1_c:y2_c, x1_c:x2_c]
@@ -130,6 +277,44 @@ class Pic:
                     self.masked[i, j] = self.original_picture[i, j]
                 else:
                     self.masked[i, j] = self.BW[i, j]
+
+    # change the mask type
+    def set_mask_type(self, type_num):
+        # change the BW foreground
+        if type_num > 20:
+            self.BW = cv2.cvtColor(cv2.cvtColor(self.original_picture, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+            self.color_state = 21
+        else:
+            self.BW = cv2.applyColorMap(self.original_picture, type_num)
+            self.color_state = type_num
+        # updates masked to match the mask
+        self.update_mask(0, 0, 672, 672)
+
+    def get_mask_type(self):
+        return self.color_state
+
+    # create back up copies of mask  up to ten versions
+    def set_backup(self):
+        # if number of backups exceeds 10 pop the oldest and insert
+        if len(self.backup) > 10:
+            self.backup.pop(0)
+            self.backup += [np.copy(self.mask)]
+        else:
+            self.backup += [np.copy(self.mask)]
+
+    # reverts current mask to previous back up
+    def revert_to_previous(self):
+        # if there are no backups simply return
+        if len(self.backup) <= 0:
+            return
+        else:
+            # pop the top of the backup stack
+            self.mask = self.backup.pop()
+            # update masked to reflect reversion
+            self.update_mask(0, 0, 672, 672)
+
+    def get_dim(self):
+        return self.original_height, self.original_width
 
 
 # class that holds the cursor size and shape
